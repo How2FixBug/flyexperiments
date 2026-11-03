@@ -1,8 +1,8 @@
 // Real connectome-derived locomotor circuit for Fly Experiments.
 // Circuit: MaleCNS v1.0, 1,045 neurons and 17,224 directed connections.
 // The circuit JSON is CC BY 4.0; see ATTRIBUTION.md.
-const DATA_URL = "https://raw.githubusercontent.com/DenisSergeevitch/desktop-fly/master/data/locomotor_circuit.json";
-const MODULE_URL = "https://raw.githubusercontent.com/DenisSergeevitch/desktop-fly/master/windows/src/locomotor.js";
+const DATA_URL = "https://cdn.jsdelivr.net/gh/DenisSergeevitch/desktop-fly@master/data/locomotor_circuit.json";
+const MODULE_URL = "https://cdn.jsdelivr.net/gh/DenisSergeevitch/desktop-fly@master/windows/src/locomotor.js";
 
 export async function loadBrain() {
   const [module, response] = await Promise.all([
