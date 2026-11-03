@@ -24,12 +24,13 @@
   <div id="scene"></div>
   <div class="top">
     <div class="brand"><strong>Fly Experiments</strong><span>One fly · interactive test environment</span></div>
-    <div class="status"><i class="dot"></i><span>Behavior controller running</span></div>
+    <div class="status"><i class="dot"></i><span id="brain-status">Loading MaleCNS connectome…</span></div>
   </div>
   <div class="help"><b>Move your cursor</b> over the platform to guide the blue sphere. The fly notices it and follows it. <b>Click</b> to give the sphere a little pulse.</div>
-  <div class="note">This browser prototype uses an animated behavior controller. The full FlyGym / connectome brain is not running in this page yet.</div>
+  <div class="note">MaleCNS v1.0 connectome: 1,045 neurons · 17,224 measured connections. Neural dynamics and sensory-to-muscle mapping are modeled; this is not a complete fly CNS or a calibrated FlyGym body.</div>
   <script type="module">
     import * as THREE from 'three';
+    import { loadBrain, tickBrain } from './brain.js';
 
     const mount = document.querySelector('#scene');
     const scene = new THREE.Scene();
@@ -102,7 +103,10 @@
     orb.position.set(1,.22,0);orb.castShadow=true;scene.add(orb);
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.28,.012,8,48),new THREE.MeshBasicMaterial({color:0x66c5ff,transparent:true,opacity:.7}));ring.rotation.x=Math.PI/2;ring.position.y=.02;scene.add(ring);
     const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.0),hit=new THREE.Vector3();
-    let hasPointer=false,pulse=0,walkPhase=0;
+    let hasPointer=false,pulse=0,neuralBrain=null;
+    const brainStatus=document.querySelector('#brain-status');
+    loadBrain().then(b=>{neuralBrain=b;brainStatus.textContent='MaleCNS connectome active · 1,045 neurons';})
+      .catch(err=>{brainStatus.textContent='Brain failed to load';console.error(err);});
     function movePointer(e){pointer.x=e.clientX/innerWidth*2-1;pointer.y=-(e.clientY/innerHeight)*2+1;hasPointer=true;raycaster.setFromCamera(pointer,camera);if(raycaster.ray.intersectPlane(plane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-4.65,4.65);hit.z=THREE.MathUtils.clamp(hit.z,-3.15,3.15);orb.position.set(hit.x,.2,hit.z);ring.position.set(hit.x,.015,hit.z)}}
     window.addEventListener('pointermove',movePointer);
     window.addEventListener('pointerdown',()=>{pulse=1});
@@ -112,17 +116,26 @@
     function animate(){
       requestAnimationFrame(animate);
       const t=clock.getElapsedTime(),dt=Math.min(clock.getDelta(),.04);
-      const dx=orb.position.x-fly.position.x,dz=orb.position.z-fly.position.z,dist=Math.hypot(dx,dz);
-      const interested=hasPointer&&dist<4.8;
-      const desired=interested?Math.atan2(dx,dz):Math.sin(t*.22)*.55;
-      let angleDiff=Math.atan2(Math.sin(desired-fly.rotation.y),Math.cos(desired-fly.rotation.y));
-      fly.rotation.y+=angleDiff*Math.min(1,dt*2.2);
-      const speed=interested?THREE.MathUtils.clamp((dist-.75)*.38,0,.9):.12;
-      fly.position.x+=Math.sin(fly.rotation.y)*speed*dt;
-      fly.position.z+=Math.cos(fly.rotation.y)*speed*dt;
-      fly.position.x=THREE.MathUtils.clamp(fly.position.x,-4.2,4.2);fly.position.z=THREE.MathUtils.clamp(fly.position.z,-2.8,2.8);
-      walkPhase+=dt*(speed>0.15?13:3);
-      legs.forEach(l=>{l.hip.rotation.x=Math.sin(walkPhase+l.phase)* (speed>.15?.34:.07);l.hip.rotation.z=l.side*.05});
+      if(neuralBrain){
+        const dx=orb.position.x-fly.position.x,dz=orb.position.z-fly.position.z;
+        const targetAngle=Math.atan2(dx,dz);
+        const angleError=Math.atan2(Math.sin(targetAngle-fly.rotation.y),Math.cos(targetAngle-fly.rotation.y));
+        const steering=hasPointer?THREE.MathUtils.clamp(angleError,-1,1):0;
+        const feedback=Array(6);
+        for(const l of legs){
+          const slot=l.index*2+(l.side<0?0:1);
+          feedback[slot]={contact:true,load:0.15,hipAngle:l.hip.rotation.x,hipVelocity:0,
+            kneeAngle:.95,kneeVelocity:0,elevationVelocity:0};
+        }
+        const commands=tickBrain(neuralBrain,feedback,steering,Math.max(1,Math.round(dt*1000)));
+        for(const l of legs){
+          const slot=l.index*2+(l.side<0?0:1),c=commands[slot];
+          const stride=c.protract-c.retract;
+          l.hip.rotation.x=THREE.MathUtils.clamp(stride*.7+(c.flex-c.extend)*.3,-.8,.8);
+          l.hip.rotation.z=l.side*(.05+c.lift*.32-c.depress*.18);
+        }
+        fly.rotation.y+=steering*dt*.22;
+      }
       wings.forEach(w=>{w.pivot.rotation.z=w.side*(.08+Math.sin(t*42)*.16);w.pivot.rotation.x=w.side*(.08+Math.sin(t*42)*.08)});
       fly.position.y=.02+Math.abs(Math.sin(walkPhase*2))*(speed>.15?.025:.006);
       pulse=Math.max(0,pulse-dt*2.6);const scale=1+pulse*.55;orb.scale.setScalar(scale);ring.scale.setScalar(1+pulse*.7);ring.material.opacity=.55+pulse*.35;
