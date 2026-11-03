@@ -5,9 +5,10 @@ const BRAIN_DATA = "https://cdn.jsdelivr.net/gh/DenisSergeevitch/desktop-fly@mas
 const VNC_DATA = "https://cdn.jsdelivr.net/gh/DenisSergeevitch/desktop-fly@master/data/locomotor_circuit.json";
 
 export async function loadBrain() {
-  const [neural, mechanics, brainResponse, vncResponse] = await Promise.all([
+  const [neural, mechanics, motor, brainResponse, vncResponse] = await Promise.all([
     import(ROOT + "sim.js"),
     import(ROOT + "legdynamics.js"),
+    import(ROOT + "locomotor.js"),
     fetch(BRAIN_DATA, { cache: "force-cache" }),
     fetch(VNC_DATA, { cache: "force-cache" })
   ]);
@@ -19,6 +20,9 @@ export async function loadBrain() {
   ]);
   if (!brainCircuit.neurons?.length || !brainCircuit.edges?.length) {
     throw new Error("FAFB visual circuit is missing neurons or synapses");
+  }
+  if (!motor.validateLocomotorCircuit(vncCircuit)) {
+    throw new Error("MaleCNS locomotor circuit failed validation");
   }
   if (!neural.LIFSim || !mechanics.SixLegDynamics) {
     throw new Error("Neural or mechanics module exports are unavailable");
