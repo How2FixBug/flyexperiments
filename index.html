@@ -107,12 +107,27 @@
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.28,.012,8,48),new THREE.MeshBasicMaterial({color:0x66c5ff,transparent:true,opacity:.7}));ring.rotation.x=Math.PI/2;ring.position.y=.02;scene.add(ring);
     const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.0),hit=new THREE.Vector3();
     let pulse=0,neuralBrain=null,previousAngularSize=null;
+    let targetVelocity=new THREE.Vector2(),lastTargetMove=0,escapeFlash=0;
     const brainStatus=document.querySelector('#brain-status');
     loadBrain().then(b=>{neuralBrain=b;brainStatus.textContent='FAFB visual + MaleCNS motor circuits active';})
       .catch(err=>{brainStatus.textContent='Brain failed to load';console.error(err);});
-    function movePointer(e){pointer.x=e.clientX/innerWidth*2-1;pointer.y=-(e.clientY/innerHeight)*2+1;raycaster.setFromCamera(pointer,camera);if(raycaster.ray.intersectPlane(plane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-4.65,4.65);hit.z=THREE.MathUtils.clamp(hit.z,-3.15,3.15);orb.position.set(hit.x,.2,hit.z);ring.position.set(hit.x,.015,hit.z)}}
+    function movePointer(e){
+      pointer.x=e.clientX/innerWidth*2-1;pointer.y=-(e.clientY/innerHeight)*2+1;
+      raycaster.setFromCamera(pointer,camera);
+      if(raycaster.ray.intersectPlane(plane,hit)){
+        hit.x=THREE.MathUtils.clamp(hit.x,-4.65,4.65);hit.z=THREE.MathUtils.clamp(hit.z,-3.15,3.15);
+        const now=performance.now(),elapsed=lastTargetMove?Math.max(.001,(now-lastTargetMove)/1000):.016;
+        targetVelocity.set((hit.x-orb.position.x)/elapsed,(hit.z-orb.position.z)/elapsed).clampLength(0,12);
+        lastTargetMove=now;orb.position.set(hit.x,.2,hit.z);ring.position.set(hit.x,.015,hit.z);
+      }
+    }
     window.addEventListener('pointermove',movePointer);
-    window.addEventListener('pointerdown',()=>{pulse=1});
+    window.addEventListener('pointerdown',(e)=>{
+      pulse=1;movePointer(e);
+      if(neuralBrain && Math.hypot(orb.position.x-fly.position.x,orb.position.z-fly.position.z)<1.35){
+        neuralBrain.sim.stimulate(neuralBrain.sim.sens,0.85,28);
+      }
+    });
     window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2))});
 
     const clock=new THREE.Clock();
@@ -130,7 +145,12 @@
         const front=Math.max(0,localZ/distance);
         const looming=THREE.MathUtils.clamp(expansion/1.8,0,1)*front;
         const leftShare=THREE.MathUtils.clamp(.5-.5*localX/distance,0,1);
+        const airProximity=THREE.MathUtils.clamp(1-distance/2.5,0,1);
+        neuralBrain.sim.airPuff=THREE.MathUtils.clamp(targetVelocity.length()/8,0,1)*airProximity;
+        targetVelocity.multiplyScalar(Math.exp(-dt*3.5));
         const output=tickBrain(neuralBrain,{left:looming*leftShare,right:looming*(1-leftShare)},dt);
+        if(output.escape) escapeFlash=.7;
+        escapeFlash=Math.max(0,escapeFlash-dt);
         fly.position.x=THREE.MathUtils.clamp(fly.position.x+output.movement.lateral,-4.4,4.4);
         fly.position.z=THREE.MathUtils.clamp(fly.position.z-output.movement.forward,-3,3);
         fly.rotation.y+=output.movement.yaw;
@@ -140,9 +160,10 @@
           l.hip.rotation.z=l.side*f.elevationAngle;
           l.kneePivot.rotation.x=f.kneeAngle-.95;
         }
-        const wingActivity=THREE.MathUtils.clamp(output.wingDrive/10,0,1);
-        wings.forEach(w=>{w.pivot.rotation.z=w.side*(.02+Math.sin(t*90)*.18*wingActivity);w.pivot.rotation.x=w.side*(.02+Math.sin(t*90)*.08*wingActivity)});
-        brainStatus.textContent='FAFB + MaleCNS active · '+output.totalSpikes.toLocaleString()+' spikes · loom '+output.loomRate.toFixed(1)+' Hz';
+        const wingActivity=THREE.MathUtils.clamp(output.wingDrive/10+escapeFlash,0,1);
+        wings.forEach(w=>{w.pivot.rotation.z=w.side*(.02+Math.sin(t*(25+65*wingActivity))*.18*wingActivity);w.pivot.rotation.x=w.side*(.02+Math.sin(t*(25+65*wingActivity))*.08*wingActivity)});
+        const behavior=output.escape?'GIANT-FIBER ESCAPE':output.backwardDrive>8?'BACKWARD WALK':output.groomingDrive>2?'GROOMING COMMAND':output.forwardDrive>1?'WALK COMMAND':'';
+        brainStatus.textContent='FAFB + MaleCNS · '+output.totalSpikes.toLocaleString()+' spikes · visual '+output.loomRate.toFixed(1)+' Hz'+(behavior?' · '+behavior:'');
       }
       fly.position.y=.02;
       pulse=Math.max(0,pulse-dt*2.6);const scale=1+pulse*.55;orb.scale.setScalar(scale);ring.scale.setScalar(1+pulse*.7);ring.material.opacity=.55+pulse*.35;
