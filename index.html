@@ -115,7 +115,7 @@
     const clock=new THREE.Clock();
     function animate(){
       requestAnimationFrame(animate);
-      const t=clock.getElapsedTime(),dt=Math.min(clock.getDelta(),.04);
+      const dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime;
       if(neuralBrain){
         const dx=orb.position.x-fly.position.x,dz=orb.position.z-fly.position.z;
         const targetAngle=Math.atan2(dx,dz);
