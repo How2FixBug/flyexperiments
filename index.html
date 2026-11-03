@@ -94,7 +94,7 @@
       const knee=new THREE.Vector3(forward,.02,side*.22),ankle=new THREE.Vector3(forward+.12,-.32,side*.32),toe=new THREE.Vector3(forward+.2,-.46,side*.34);
       segment(hip,new THREE.Vector3(0,0,0),knee,.065,jointMat);segment(hip,knee,ankle,.038,dark);segment(hip,ankle,toe,.022,jointMat);
       ellipsoid(hip,jointMat,[...knee.toArray()],[.055,.055,.055]);
-      legs.push({hip,phase:i*.9+(side>0?Math.PI:0),side,index:i});
+      legs.push({hip,phase:i*.9+(side>0?Math.PI:0),side,index:i,legId:i*2+(side>0?1:0)});
     }
     fly.position.set(-.8,.02,.15);
 
@@ -121,23 +121,19 @@
         const targetAngle=Math.atan2(dx,dz);
         const angleError=Math.atan2(Math.sin(targetAngle-fly.rotation.y),Math.cos(targetAngle-fly.rotation.y));
         const steering=hasPointer?THREE.MathUtils.clamp(angleError,-1,1):0;
-        const feedback=Array(6);
+        const output=tickBrain(neuralBrain,steering,dt);
+        fly.position.x=THREE.MathUtils.clamp(fly.position.x+output.movement.lateral,-4.4,4.4);
+        fly.position.z=THREE.MathUtils.clamp(fly.position.z-output.movement.forward,-3,3);
+        fly.rotation.y+=output.movement.yaw;
         for(const l of legs){
-          const slot=l.index*2+(l.side<0?0:1);
-          feedback[slot]={contact:true,load:0.15,hipAngle:l.hip.rotation.x,hipVelocity:0,
-            kneeAngle:.95,kneeVelocity:0,elevationVelocity:0};
+          const f=output.legs[l.legId];
+          l.hip.rotation.x=f.hipAngle;
+          l.hip.rotation.z=l.side*f.elevationAngle;
         }
-        const commands=tickBrain(neuralBrain,feedback,steering,Math.max(1,Math.round(dt*1000)));
-        for(const l of legs){
-          const slot=l.index*2+(l.side<0?0:1),c=commands[slot];
-          const stride=c.protract-c.retract;
-          l.hip.rotation.x=THREE.MathUtils.clamp(stride*.7+(c.flex-c.extend)*.3,-.8,.8);
-          l.hip.rotation.z=l.side*(.05+c.lift*.32-c.depress*.18);
-        }
-        fly.rotation.y+=steering*dt*.22;
+        brainStatus.textContent='MaleCNS active · '+output.totalSpikes.toLocaleString()+' neural spikes';
       }
       wings.forEach(w=>{w.pivot.rotation.z=w.side*(.08+Math.sin(t*42)*.16);w.pivot.rotation.x=w.side*(.08+Math.sin(t*42)*.08)});
-      fly.position.y=.02+Math.abs(Math.sin(walkPhase*2))*(speed>.15?.025:.006);
+      fly.position.y=.02;
       pulse=Math.max(0,pulse-dt*2.6);const scale=1+pulse*.55;orb.scale.setScalar(scale);ring.scale.setScalar(1+pulse*.7);ring.material.opacity=.55+pulse*.35;
       renderer.render(scene,camera);
     }
