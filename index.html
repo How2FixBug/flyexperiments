@@ -26,8 +26,8 @@
     <div class="brand"><strong>Fly Experiments</strong><span>Connectome-driven visual + locomotor test</span></div>
     <div class="status"><i class="dot"></i><span id="brain-status">Loading visual + locomotor connectomes…</span></div>
   </div>
-  <div class="help"><b>Move the blue target toward the fly.</b> As it gets closer and grows in apparent size, a modeled looming signal enters the fly’s LC4/LPLC2 visual neurons. The connectome processes that signal and sends its own descending output to the leg circuit.</div>
-  <div class="note">FAFB v783 visual/descending circuit: 668 neurons. MaleCNS v1.0 locomotor circuit: 1,045 neurons. Cross-specimen descending interface and visual input are modeled; this is not a complete fly CNS or calibrated FlyGym physics.</div>
+  <div class="help"><b>Move the blue target toward the fly</b> for visual looming input. Move it quickly nearby for a modeled air-puff input. Click close to the fly for a brief tactile/sensory stimulus. The fly’s connectome processes these signals; its descending and nerve-cord circuits control the legs and wing command.</div>
+  <div class="note">FAFB v783 selected brain circuit: 668 neurons. MaleCNS locomotor circuit: 1,045 neurons. Includes looming, air-puff and touch inputs plus walking, reverse, escape and grooming command pathways. Smell, feeding and a complete brain are not included.</div>
   <script type="module">
     import * as THREE from 'three';
     import { loadBrain, tickBrain } from './brain.js';
